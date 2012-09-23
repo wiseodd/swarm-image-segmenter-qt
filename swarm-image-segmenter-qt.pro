@@ -9,7 +9,6 @@ QT       += core gui
 TARGET = swarm-image-segmenter-qt
 TEMPLATE = app
 
-
 SOURCES += main.cpp \
     pso_cluster.cpp \
     main_ui.cpp \

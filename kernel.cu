@@ -1,18 +1,15 @@
 #include <math_functions.h>
 #include "pso_cluster.h"
 
-// Image channel, 1 for grayscale, 3 for RGB
-__device__ int CHANNEL;
-
 /*
  * Get euclidean distance between 2 pixels
  */
 __host__ __device__ 
-float devGetDistance(int *first, int *second)
+float devGetDistance(int *first, int *second, int channel)
 {
     float total = 0.0f;
 
-    for (int i = 0; i < CHANNEL; i++)
+    for (int i = 0; i < channel; i++)
     {
         int res = (first[i] - second[i]);
         total += res * res;
@@ -26,7 +23,7 @@ float devGetDistance(int *first, int *second)
  */
 __host__ __device__ 
 float devFitness(short* assignMat, int* datas, int* centroids, int data_size, 
-                 int cluster_size)
+                 int cluster_size, int channel)
 {
     float total = 0.0f;
 
@@ -37,8 +34,8 @@ float devFitness(short* assignMat, int* datas, int* centroids, int data_size,
         for (int j = 0; j < data_size; j++)
         {
             if (assignMat[j] == i)
-                subtotal += devGetDistance(&datas[j * CHANNEL],
-                                           &centroids[i * CHANNEL]);
+                subtotal += devGetDistance(&datas[j * channel],
+                                           &centroids[i * channel], channel);
         }
 
         total += subtotal / data_size;
@@ -52,7 +49,7 @@ float devFitness(short* assignMat, int* datas, int* centroids, int data_size,
  */
 __host__ __device__ 
 void devAssignDataToCentroid(short *assignMat, int *datas, int *centroids, 
-                             int data_size, int cluster_size)
+                             int data_size, int cluster_size, int channel)
 {
     for (int i = 0; i < data_size; i++)
     {
@@ -61,8 +58,8 @@ void devAssignDataToCentroid(short *assignMat, int *datas, int *centroids,
 
         for (int j = 0; j < cluster_size; j++)
         {
-            float nearestDist = devGetDistance(&datas[i * CHANNEL],
-                                               &centroids[j * CHANNEL]);
+            float nearestDist = devGetDistance(&datas[i * channel],
+                                               &centroids[j * channel], channel);
 
             if (nearestDist < nearestCentroidDist)
             {
@@ -80,13 +77,13 @@ void devAssignDataToCentroid(short *assignMat, int *datas, int *centroids,
  */
 void initialize(int *positions, int *velocities, int *pBests, int *gBest, 
                 const Data* datas, int data_size, int particle_size,
-                int cluster_size)
+                int cluster_size, int channel)
 {
-    for (int i = 0; i < particle_size * cluster_size * CHANNEL; i+= CHANNEL)
+    for (int i = 0; i < particle_size * cluster_size * channel; i+= channel)
     {
         int rand = round(getRandom(0, data_size - 1));
 
-        for(int j = 0; j < CHANNEL; j++)
+        for(int j = 0; j < channel; j++)
         {
             positions[i + j] = datas[rand].info[j];
             pBests[i + j] = datas[rand].info[j];
@@ -94,7 +91,7 @@ void initialize(int *positions, int *velocities, int *pBests, int *gBest,
         }
     }
 
-    for(int i = 0; i < cluster_size * CHANNEL; i++)
+    for(int i = 0; i < cluster_size * channel; i++)
         gBest[i] = pBests[i];
 }
 
@@ -105,17 +102,17 @@ __global__ void kernelUpdateParticle(int *positions, int *velocities,
                                      int *pBests, int *gBest, short *posAssign, 
                                      int* datas, float rp, float rg, 
                                      int data_size, int particle_size, 
-                                     int cluster_size)
+                                     int cluster_size, int channel)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if(i >= particle_size * cluster_size * CHANNEL)
+    if(i >= particle_size * cluster_size * channel)
         return;
 
     // Update particle velocity and position
     velocities[i] = (int)lroundf(OMEGA * velocities[i]
             + c1 * rp * (pBests[i] - positions[i])
-            + c2 * rg * (gBest[i % (cluster_size * CHANNEL)] - positions[i]));
+            + c2 * rg * (gBest[i % (cluster_size * channel)] - positions[i]));
 
     positions[i] += velocities[i];
 }
@@ -125,10 +122,11 @@ __global__ void kernelUpdateParticle(int *positions, int *velocities,
  */
 __global__ void kernelUpdatePBest(int *positions, int *pBests, short *posAssign, 
                                   short *pBestAssign, int* datas, int data_size,
-                                  int particle_size, int cluster_size)
+                                  int particle_size, int cluster_size,
+                                  int channel)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int offsetParticle = i * cluster_size * CHANNEL;
+    int offsetParticle = i * cluster_size * channel;
     int offsetAssign = i * data_size;
 
     if(i >= particle_size)
@@ -136,16 +134,17 @@ __global__ void kernelUpdatePBest(int *positions, int *pBests, short *posAssign,
 
     devAssignDataToCentroid(&posAssign[offsetAssign], datas, 
                             &positions[offsetParticle], data_size, 
-                            cluster_size);
+                            cluster_size, channel);
 
     // Update pBest
     if (devFitness(&posAssign[offsetAssign], datas, &positions[offsetParticle], 
-                   data_size, cluster_size)
+                   data_size, cluster_size, channel)
             < devFitness(&pBestAssign[offsetAssign], datas, 
-                         &pBests[offsetParticle], data_size, cluster_size))
+                         &pBests[offsetParticle], data_size, cluster_size,
+                         channel))
     {
         // Update pBest position
-        for (int k = 0; k < cluster_size * CHANNEL; k++)
+        for (int k = 0; k < cluster_size * channel; k++)
             pBests[offsetParticle + k] = positions[offsetParticle + k];
 
         // Update pBest assignment matrix
@@ -161,8 +160,6 @@ GBest devicePsoClustering(Data *datas, int *flatDatas, int data_size,
                           int channel, int particle_size, int cluster_size,
                           int max_iter)
 {
-    CHANNEL = channel;
-
     // Initialize host memory
     int *positions = new int[particle_size * cluster_size * channel];
     int *velocities = new int[particle_size * cluster_size * channel];
@@ -192,7 +189,7 @@ GBest devicePsoClustering(Data *datas, int *flatDatas, int data_size,
     }
 
     initialize(positions, velocities, pBests, gBest, datas, data_size, 
-               particle_size, cluster_size);
+               particle_size, cluster_size, channel);
 
     // Initialize device memory
     int *devPositions, *devVelocities, *devPBests, *devGBest;
@@ -234,11 +231,11 @@ GBest devicePsoClustering(Data *datas, int *flatDatas, int data_size,
     kernelUpdateParticle<<<blocksFull, threads>>>
         (devPositions, devVelocities, devPBests, devGBest, devPosAssign, 
          devDatas, getRandomClamped(), getRandomClamped(), data_size, 
-         particle_size, cluster_size);
+         particle_size, cluster_size, channel);
 
     kernelUpdatePBest<<<blocksPart, threads>>>
         (devPositions, devPBests, devPosAssign, devPBestAssign, devDatas, 
-         data_size, particle_size, cluster_size);
+         data_size, particle_size, cluster_size, channel);
 
     cudaThreadSynchronize();
 
@@ -257,11 +254,11 @@ GBest devicePsoClustering(Data *datas, int *flatDatas, int data_size,
         // Run kernel, async using stream-1
         kernelUpdateParticle<<<blocksFull, threads, 0, stream1>>>
             (devPositions, devVelocities, devPBests, devGBest, devPosAssign, 
-             devDatas, rp, rg, data_size, particle_size, cluster_size);
+             devDatas, rp, rg, data_size, particle_size, cluster_size, channel);
 
         kernelUpdatePBest<<<blocksPart, threads, 0, stream1>>>
             (devPositions, devPBests, devPosAssign, devPBestAssign, devDatas, 
-             data_size, particle_size, cluster_size);
+             data_size, particle_size, cluster_size, channel);
 
         // Calculate gBest async between GPU and CPU
         for(int i = 0; i < particle_size; i++)
@@ -272,9 +269,10 @@ GBest devicePsoClustering(Data *datas, int *flatDatas, int data_size,
 
             // Compare pBest and gBest
             if (devFitness(&pBestAssign[offsetAssign], flatDatas, 
-                           &pBests[offsetParticle], data_size, cluster_size)
+                           &pBests[offsetParticle], data_size, cluster_size,
+                           channel)
                 < devFitness(gBestAssign, flatDatas, gBest, data_size, 
-                             cluster_size))
+                             cluster_size, channel))
             {
                 // Update gBest position
                 for (int k = 0; k < cluster_size * channel; k++)
@@ -322,7 +320,7 @@ GBest devicePsoClustering(Data *datas, int *flatDatas, int data_size,
     gBestReturn.arrCentroids = gBest;
     gBestReturn.quantError = devFitness(gBestReturn.gBestAssign, flatDatas,
                                         gBestReturn.arrCentroids, data_size,
-                                        cluster_size);
+                                        cluster_size, channel);
 
     return gBestReturn;
 }

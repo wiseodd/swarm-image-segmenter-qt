@@ -64,7 +64,7 @@ void initializePSO(Particle *particles, GBest& gBest, const Data *datas,
 GBest hostPsoClustering(Data *datas, int data_size, int channel,
                         int particle_size, int cluster_size, int max_iter);
 extern "C" float devFitness(short *assignMat, int *Datas, int *centroids,
-                            int data_size, int cluster_size);
+                            int data_size, int cluster_size, int channel);
 extern "C" GBest devicePsoClustering(Data *datas, int *flatDatas, int data_size,
                                      int channel, int particle_size,
                                      int cluster_size, int max_iter);

@@ -27,7 +27,7 @@ void MainUI::loadImage()
     QString file_name;
     file_name = QFileDialog::getOpenFileName(this, "Select image",
                                             "/home/adi/Pictures",
-                                            "Image Files (*.png *.jpg *.bmp)");
+                                            "Image Files (*.jpg *.bmp)");
 
     // Load image
     IplImage* input = NULL;
@@ -146,9 +146,6 @@ void MainUI::segmentImage()
     float time_elapsed = timer.elapsed();
     float quant_error = gBest.quantError;
 
-    for(int i = 0; i < data_size_; i++)
-        qDebug() << gBest.gBestAssign[i];
-
     ui->labelProgress->setText("Finished!");
 
     // List for cluster color
@@ -190,6 +187,13 @@ void MainUI::segmentImage()
     ui->statusBar->showMessage(message);
 
     cvReleaseImage(&outImage);
+
+    if(cuda_enabled)
+        cudaFreeHost(gBest.arrCentroids);
+    else
+        delete[] gBest.centroids;
+
+    delete[] gBest.gBestAssign;
 }
 
 void MainUI::on_btnStart_clicked()
