@@ -48,6 +48,7 @@ struct GBest
     short *gBestAssign;
     Data *centroids;
     int *arrCentroids;
+    float quantError;
 };
 
 float getRandom(float low, float high);
@@ -60,11 +61,11 @@ void assignDataToCentroid(short *assignMat, const Data *datas,
                           int cluster_size);
 void initializePSO(Particle *particles, GBest& gBest, const Data *datas,
                    int data_size, int particle_size, int cluster_size);
-GBest hostPsoClustering(Data *datas, int data_size, int particle_size,
-                        int cluster_size, int max_iter);
+GBest hostPsoClustering(Data *datas, int data_size, int channel,
+                        int particle_size, int cluster_size, int max_iter);
 extern "C" float devFitness(short *assignMat, int *Datas, int *centroids,
                             int data_size, int cluster_size);
 extern "C" GBest devicePsoClustering(Data *datas, int *flatDatas, int data_size,
-                                     int particle_size, int cluster_size, 
-                                     int max_iter);
+                                     int channel, int particle_size,
+                                     int cluster_size, int max_iter);
 #endif /* PSO_CLUSTER_H */

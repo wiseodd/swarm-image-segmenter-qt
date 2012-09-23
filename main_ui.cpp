@@ -12,6 +12,8 @@ MainUI::MainUI(QWidget *parent) :
     arr_image_ = NULL;
     flat_datas_ = NULL;
     datas_ = NULL;
+
+    ui->labelProgress->setText("Please load an image!");
 }
 
 MainUI::~MainUI()
@@ -53,25 +55,21 @@ void MainUI::loadImage()
     // Load image to array
     for (int i = 0; i < w * h; i++)
     {
-        arr_image_[i * c + 0] = (unsigned char)input->imageData[i * c + 0];
-        arr_image_[i * c + 1] = (unsigned char)input->imageData[i * c + 1];
-        arr_image_[i * c + 2] = (unsigned char)input->imageData[i * c + 2];
-
-        flat_datas_[i * c + 0] = (unsigned char)input->imageData[i * c + 0];
-        flat_datas_[i * c + 1] = (unsigned char)input->imageData[i * c + 1];
-        flat_datas_[i * c + 2] = (unsigned char)input->imageData[i * c + 2];
-
         Data d;
 
-        d.info[0] = (unsigned char)input->imageData[i * c + 0];
-        d.info[1] = (unsigned char)input->imageData[i * c + 1];
-        d.info[2] = (unsigned char)input->imageData[i * c + 2];
+        for(int j = 0; j < c; j++)
+        {
+            arr_image_[i * c + j] = (unsigned char)input->imageData[i * c + j];
+            flat_datas_[i * c + j] = (unsigned char)input->imageData[i * c + j];
+            d.info[j] = (unsigned char)input->imageData[i * c + j];
+        }
 
         datas_[i] = d;
     }
 
     // Show original image
     showImage(input);
+    ui->labelProgress->setText("Image loaded");
 
     // Cleanup
     cvReleaseImage(&input);
@@ -139,23 +137,19 @@ void MainUI::segmentImage()
     // Start PSO
     if(cuda_enabled)
         gBest = engine_.segmentImageDevice(datas_, flat_datas_, data_size_,
-                                           particle_size, cluster_size,
+                                           channel_, particle_size, cluster_size,
                                            max_iter);
     else
-        gBest = engine_.segmentImageHost(datas_, data_size_, particle_size,
-                                         cluster_size, max_iter);
+        gBest = engine_.segmentImageHost(datas_, data_size_, channel_,
+                                         particle_size, cluster_size, max_iter);
 
     float time_elapsed = timer.elapsed();
-    float quant_error;
+    float quant_error = gBest.quantError;
 
-    // Calculate final error
-    if(cuda_enabled)
-        quant_error = devFitness(gBest.gBestAssign, flat_datas_,
-                                 gBest.arrCentroids, data_size_, cluster_size);
-    else
-        quant_error = fitness(gBest.gBestAssign, datas_, gBest.centroids,
-                              data_size_, cluster_size);
+    for(int i = 0; i < data_size_; i++)
+        qDebug() << gBest.gBestAssign[i];
 
+    ui->labelProgress->setText("Finished!");
 
     // List for cluster color
     unsigned char colorList[9][3] = { { 0, 0, 255 }, { 255, 0, 0 },
@@ -164,6 +158,9 @@ void MainUI::segmentImage()
                                      { 128, 128, 128 }, { 128, 0, 0 },
                                      { 255, 128, 0 } };
 
+    int channel = 3;
+    char *res_image = new char[width_ * height_ * channel];
+
     // Coloring clusters
     for (int i = 0; i < data_size_; i++)
     {
@@ -171,17 +168,16 @@ void MainUI::segmentImage()
        {
            if (gBest.gBestAssign[i] == j)
            {
-               arr_image_[i * channel_ + 0] = colorList[j][0];
-               arr_image_[i * channel_ + 1] = colorList[j][1];
-               arr_image_[i * channel_ + 2] = colorList[j][2];
+               res_image[i * channel + 0] = colorList[j][0];
+               res_image[i * channel + 1] = colorList[j][1];
+               res_image[i * channel + 2] = colorList[j][2];
            }
        }
     }
 
     // Save resulted image
-    IplImage* outImage = cvCreateImage(cvSize(width_, height_), depth_,
-                                       channel_);
-    outImage->imageData = arr_image_;
+    IplImage* outImage = cvCreateImage(cvSize(width_, height_), depth_, channel);
+    outImage->imageData = res_image;
     cvSaveImage("Result.jpg", outImage);
     // Show image
     showImage(outImage);

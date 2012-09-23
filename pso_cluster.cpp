@@ -7,6 +7,9 @@
 
 #include "pso_cluster.h"
 
+// Image channel, 1 for grayscale, 3 for RGB
+int CHANNEL;
+
 /*
  * Get random between low and high inclusive
  */
@@ -41,7 +44,7 @@ float getDistance(Data first, Data second)
 {
     double total = 0.0;
 
-    for (int i = 0; i < DATA_DIM; i++)
+    for (int i = 0; i < CHANNEL; i++)
     {
         int res = (first.info[i] - second.info[i]);
         total += res * res;
@@ -121,7 +124,7 @@ void initializePSO(Particle *particles, GBest& gBest, const Data *datas,
         {
             Data d;
 
-            for (int k = 0; k < DATA_DIM; k++)
+            for (int k = 0; k < CHANNEL; k++)
                 d.info[k] = 0;
 
             particles[i].velocity[j] = d;
@@ -139,7 +142,7 @@ void initializePSO(Particle *particles, GBest& gBest, const Data *datas,
     {
         Data d;
 
-        for (int k = 0; k < DATA_DIM; k++)
+        for (int k = 0; k < CHANNEL; k++)
             d.info[k] = round(abs(getRandom(RANGE_MIN, RANGE_MAX)));
 
         gBest.centroids[j] = d;
@@ -149,10 +152,11 @@ void initializePSO(Particle *particles, GBest& gBest, const Data *datas,
 /*
  * PSO main function
  */
-GBest hostPsoClustering(Data *datas, int data_size, int particle_size,
-                        int cluster_size, int max_iter)
+GBest hostPsoClustering(Data *datas, int data_size, int channel,
+                        int particle_size, int cluster_size, int max_iter)
 {
     // initialize
+    CHANNEL = channel;
     GBest gBest;
     Particle *particles = new Particle[particle_size];
     short **assignMatrix = new short*[particle_size];
@@ -190,7 +194,7 @@ GBest hostPsoClustering(Data *datas, int data_size, int particle_size,
             for (int k = 0; k < cluster_size; k++)
             {
                 // foreach Data dimension
-                for (int l = 0; l < DATA_DIM; l++)
+                for (int l = 0; l < CHANNEL; l++)
                 {
                     particles[j].velocity[k].info[l] = 
                         round(OMEGA * particles[j].velocity[k].info[l]
@@ -239,6 +243,9 @@ GBest hostPsoClustering(Data *datas, int data_size, int particle_size,
             }
         }
     }
+
+    gBest.quantError = fitness(gBest.gBestAssign, datas, gBest.centroids,
+                               data_size, cluster_size);
 
     // cleanup
     for (int i = 0; i < particle_size; i++)

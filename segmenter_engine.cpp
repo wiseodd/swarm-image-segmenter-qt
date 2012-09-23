@@ -5,18 +5,19 @@ SegmenterEngine::SegmenterEngine()
 
 }
 
-GBest SegmenterEngine::segmentImageHost(Data *datas, int data_size,
+GBest SegmenterEngine::segmentImageHost(Data *datas, int data_size, int channel,
                                         int particle_size, int cluster_size,
                                         int max_iter)
 {
-    return hostPsoClustering(datas, data_size, particle_size, cluster_size,
-                             max_iter);
+    return hostPsoClustering(datas, data_size, channel, particle_size,
+                             cluster_size, max_iter);
 }
 
 GBest SegmenterEngine::segmentImageDevice(Data *datas, int *flat_datas,
-                                          int data_size, int particle_size,
-                                          int cluster_size, int max_iter)
+                                          int data_size, int channel,
+                                          int particle_size, int cluster_size,
+                                          int max_iter)
 {
-    return devicePsoClustering(datas, flat_datas, data_size, particle_size,
-                        cluster_size, max_iter);
+    return devicePsoClustering(datas, flat_datas, data_size, channel,
+                               particle_size, cluster_size, max_iter);
 }
