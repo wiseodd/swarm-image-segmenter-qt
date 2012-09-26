@@ -88,9 +88,9 @@ void MainUI::loadImage()
     }
 
     // Show image informations
-    ui->lblImageLoc->setText(ui->lblImageLoc->text() + file_name);
-    ui->lblImageSize->setText(ui->lblImageSize->text() + QString::number(w)
-                              + " x " + QString::number(h));
+    ui->lblImageLoc->setText(QString("Image Location : ") + file_name);
+    ui->lblImageSize->setText(QString("Size : ") + QString::number(w)
+                              + QString(" x ") + QString::number(h));
 
     // Show original image
     showImage(input);
