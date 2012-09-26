@@ -13,6 +13,26 @@ MainUI::MainUI(QWidget *parent) :
     flat_datas_ = NULL;
     datas_ = NULL;
 
+    int dev_count;
+    cudaGetDeviceCount(&dev_count);
+
+    if(dev_count <= 0)
+    {
+        ui->chkCuda->setEnabled(false);
+        ui->lblGraphicCard->setText(ui->lblGraphicCard->text() + "None");
+        ui->lblMemory->setText(ui->lblMemory->text() + "None");
+    }
+    else
+    {
+        cudaDeviceProp dev_prop;
+        cudaGetDeviceProperties(&dev_prop, 0);
+
+        ui->lblGraphicCard->setText(ui->lblGraphicCard->text() + dev_prop.name);
+        ui->lblMemory->setText(ui->lblMemory->text()
+                               + QString::number(dev_prop.totalGlobalMem / 1000000)
+                               + " MB");
+    }
+
     ui->labelProgress->setText("Please load an image!");
 }
 
@@ -66,6 +86,11 @@ void MainUI::loadImage()
 
         datas_[i] = d;
     }
+
+    // Show image informations
+    ui->lblImageLoc->setText(ui->lblImageLoc->text() + file_name);
+    ui->lblImageSize->setText(ui->lblImageSize->text() + QString::number(w)
+                              + " x " + QString::number(h));
 
     // Show original image
     showImage(input);
@@ -155,6 +180,7 @@ void MainUI::segmentImage()
                                      { 128, 128, 128 }, { 128, 0, 0 },
                                      { 255, 128, 0 } };
 
+    // Resulted image always have 3 channel, RGB, to distinguish between cluster
     int channel = 3;
     char *res_image = new char[width_ * height_ * channel];
 
